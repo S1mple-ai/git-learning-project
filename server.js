@@ -171,11 +171,20 @@ app.post('/api/feishu/card_action', async (req, res) => {
         return res.status(200).send({ challenge: req.body.challenge });
     }
 
-    const { action, open_id } = req.body;
+    console.log('[DEBUG] 收到卡片交互，原始 Body:', JSON.stringify(req.body));
+
+    const { action, open_id, user_id } = req.body;
+    // 飞书回调中，用户 ID 可能在 open_id 或 user_id.open_id 中
+    const callbackOpenId = open_id || (user_id && user_id.open_id);
+    
+    // 优先级：回调传回的 ID > 环境变量里的 ID
+    const targetOpenId = callbackOpenId || process.env.FEISHU_USER_ID;
+
     if (action && action.value && action.value.action === 'save_to_doc') {
         const { content, title } = action.value;
 
         try {
+            console.log(`[DEBUG] 正在为用户 ${targetOpenId} 创建文档...`);
             // 1. 创建新文档
             const createRes = await larkClient.docx.document.create({
                 data: {
@@ -184,16 +193,16 @@ app.post('/api/feishu/card_action', async (req, res) => {
             });
             const documentId = createRes.document.document_id;
 
-            // 2. 写入内容 (简单的文本块)
+            // 2. 写入内容
             await larkClient.docx.documentBlock.patch({
                 path: {
                     document_id: documentId,
-                    block_id: documentId, // 根 block_id 等于 document_id
+                    block_id: documentId,
                 },
                 data: {
                     children: [
                         {
-                            block_type: 2, // 文本类型
+                            block_type: 2,
                             text: {
                                 content: content,
                             },
@@ -205,23 +214,23 @@ app.post('/api/feishu/card_action', async (req, res) => {
 
             const docUrl = `https://feishu.cn/docx/${documentId}`;
 
-            // 3. 返回卡片更新或发送消息通知用户
+            // 3. 响应卡片交互
             res.json({
                 toast: "保存成功！正在发送文档链接...",
             });
 
-            // 异步给用户发个消息链接
+            // 给用户发送文档链接消息
             await larkClient.im.message.create({
                 params: { receive_id_type: 'open_id' },
                 data: {
-                    receive_id: open_id,
+                    receive_id: targetOpenId,
                     content: JSON.stringify({ text: `文档已创建成功！你可以点击查看：${docUrl}` }),
                     msg_type: 'text',
                 },
             });
         } catch (error) {
-            console.error('创建云文档失败:', error);
-            res.json({ toast: "保存失败，请检查权限设置" });
+            console.error('[ERROR] 创建云文档详细错误:', error.response ? JSON.stringify(error.response.data) : error.message);
+            res.json({ toast: "保存失败，请检查权限并发布版本" });
         }
     } else {
         res.status(200).send();
