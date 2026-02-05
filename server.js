@@ -68,12 +68,39 @@ const eventDispatcher = new lark.EventDispatcher({
             // 更新内存存储
             userContexts.set(openId, context);
 
-            // 回复飞书消息
+            // 构建飞书消息卡片
+            const cardContent = {
+                config: { wide_screen_mode: true },
+                header: {
+                    title: { content: "AI 助手回复", tag: "plain_text" },
+                    template: "blue"
+                },
+                elements: [
+                    {
+                        tag: "div",
+                        text: { content: aiReply, tag: "lark_md" }
+                    },
+                    {
+                        tag: "hr"
+                    },
+                    {
+                        tag: "note",
+                        elements: [
+                            {
+                                tag: "plain_text",
+                                content: `上下文消息：${context.messages.length}条 | GLM-4-Flash 提供支持`
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            // 回复飞书消息 (使用 interactive 消息类型即消息卡片)
             await larkClient.im.message.reply({
                 path: { message_id: message.message_id },
                 data: {
-                    content: JSON.stringify({ text: aiReply }),
-                    msg_type: 'text',
+                    content: JSON.stringify(cardContent),
+                    msg_type: 'interactive',
                 },
             });
         } catch (error) {
