@@ -177,8 +177,8 @@ app.post('/api/feishu/card_action', async (req, res) => {
     // 飞书回调中，用户 ID 可能在 open_id 或 user_id.open_id 中
     const callbackOpenId = open_id || (user_id && user_id.open_id);
     
-    // 优先级：回调传回的 ID > 环境变量里的 ID
-    const targetOpenId = callbackOpenId || process.env.FEISHU_USER_ID;
+    // 强制优先级：先用环境变量里的“万能有效 ID”，如果没有再用回调的
+    const targetOpenId = process.env.FEISHU_USER_ID || callbackOpenId;
 
     if (action && action.value && action.value.action === 'save_to_doc') {
         const { content, title } = action.value;
