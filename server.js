@@ -28,8 +28,13 @@ const eventDispatcher = new lark.EventDispatcher({
     verificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
 }).register({
     'im.message.receive_v1': async (data) => {
-        const { message } = data;
+        const { message, sender } = data;
         const text = JSON.parse(message.content).text;
+        const actualOpenId = sender.sender_id.open_id;
+
+        console.log('--- 收到消息 ---');
+        console.log('内容:', text);
+        console.log('您的真实 Open ID 是:', actualOpenId);
 
         try {
             // 调用 AI 获取回复
