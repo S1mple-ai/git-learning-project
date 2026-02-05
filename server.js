@@ -21,6 +21,11 @@ const aiClient = new OpenAI({
     baseURL: "https://open.bigmodel.cn/api/paas/v4/"
 });
 
+// 飞书用户对话上下文管理 (简单内存实现)
+const userContexts = new Map();
+const MAX_CONTEXT_LEN = 10; // 每个用户保留最近10条消息
+const CONTEXT_TIMEOUT = 10 * 60 * 1000; // 10分钟不说话自动清除上下文
+
 // 解析 JSON
 app.use(express.json());
 // 飞书 Webhook 需要处理特定格式，如果是处理事件，通常建议使用 SDK 提供的 Dispatcher
@@ -28,16 +33,40 @@ const eventDispatcher = new lark.EventDispatcher({
     verificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
 }).register({
     'im.message.receive_v1': async (data) => {
-        const { message } = data;
+        const { message, sender } = data;
         const text = JSON.parse(message.content).text;
+        const openId = sender.sender_id.open_id;
+
+        // 获取或初始化上下文
+        let context = userContexts.get(openId) || { messages: [], lastUpdate: Date.now() };
+        
+        // 如果超时，重置上下文
+        if (Date.now() - context.lastUpdate > CONTEXT_TIMEOUT) {
+            context = { messages: [], lastUpdate: Date.now() };
+        }
+
+        // 添加用户当前消息
+        context.messages.push({ role: "user", content: text });
+        context.lastUpdate = Date.now();
 
         try {
-            // 调用 AI 获取回复
+            // 调用 AI 获取回复 (带上历史记录)
             const response = await aiClient.chat.completions.create({
                 model: "glm-4-flash",
-                messages: [{ role: "user", content: text }],
+                messages: context.messages,
             });
             const aiReply = response.choices[0].message.content;
+
+            // 添加 AI 回复到上下文
+            context.messages.push({ role: "assistant", content: aiReply });
+
+            // 保持上下文长度
+            if (context.messages.length > MAX_CONTEXT_LEN) {
+                context.messages = context.messages.slice(-MAX_CONTEXT_LEN);
+            }
+
+            // 更新内存存储
+            userContexts.set(openId, context);
 
             // 回复飞书消息
             await larkClient.im.message.reply({
