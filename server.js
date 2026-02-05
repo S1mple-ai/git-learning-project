@@ -57,7 +57,19 @@ const eventDispatcher = new lark.EventDispatcher({
 });
 
 // 飞书事件订阅 Webhook 接口
-app.post('/api/feishu/webhook', lark.adaptExpress(eventDispatcher));
+app.post('/api/feishu/webhook', (req, res, next) => {
+    console.log('收到 Webhook 请求:', JSON.stringify(req.body));
+    
+    // 特别处理飞书的 URL 验证（Challenge）
+    if (req.body.type === 'url_verification') {
+        console.log('正在响应飞书 URL 验证...');
+        return res.json({
+            challenge: req.body.challenge
+        });
+    }
+    // 其他事件交给 SDK 处理
+    lark.adaptExpress(eventDispatcher)(req, res, next);
+});
 
 // 主动发消息接口 (示例)
 app.post('/api/feishu/send', async (req, res) => {
