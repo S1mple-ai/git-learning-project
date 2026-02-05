@@ -37,7 +37,7 @@ const eventDispatcher = new lark.EventDispatcher({
         try {
             // 调用 AI 获取回复
             const response = await aiClient.chat.completions.create({
-                model: "glm-4.7-flash",
+                model: "glm-4-flash",
                 messages: [{ role: "user", content: text }],
             });
             const aiReply = response.choices[0].message.content;
@@ -58,12 +58,14 @@ const eventDispatcher = new lark.EventDispatcher({
 
 // 飞书事件订阅 Webhook 接口
 app.post('/api/feishu/webhook', (req, res, next) => {
-    console.log('收到 Webhook 请求:', JSON.stringify(req.body));
+    console.log('--- 收到 Webhook 请求 ---');
+    console.log('Headers:', JSON.stringify(req.headers));
+    console.log('Body:', JSON.stringify(req.body));
     
     // 特别处理飞书的 URL 验证（Challenge）
-    if (req.body.type === 'url_verification') {
-        console.log('正在响应飞书 URL 验证...');
-        return res.json({
+    if (req.body && req.body.type === 'url_verification') {
+        console.log('✅ 正在响应飞书 URL 验证 (Challenge)');
+        return res.status(200).send({
             challenge: req.body.challenge
         });
     }
