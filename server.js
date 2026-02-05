@@ -68,6 +68,9 @@ const eventDispatcher = new lark.EventDispatcher({
             // 更新内存存储
             userContexts.set(openId, context);
 
+            // 提取前 20 个字符作为标题
+            const docTitle = text.substring(0, 20) || "AI 对话记录";
+
             // 构建飞书消息卡片
             const cardContent = {
                 config: { wide_screen_mode: true },
@@ -89,6 +92,21 @@ const eventDispatcher = new lark.EventDispatcher({
                             {
                                 tag: "plain_text",
                                 content: `上下文消息：${context.messages.length}条 | GLM-4-Flash 提供支持`
+                            }
+                        ]
+                    },
+                    {
+                        tag: "action",
+                        actions: [
+                            {
+                                tag: "button",
+                                text: { content: "保存到云文档", tag: "plain_text" },
+                                type: "primary",
+                                value: {
+                                    action: "save_to_doc",
+                                    content: aiReply,
+                                    title: docTitle
+                                }
                             }
                         ]
                     }
@@ -143,6 +161,70 @@ app.post('/api/feishu/push', async (req, res) => {
     } catch (error) {
         console.error('主动发送失败:', error);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 飞书卡片交互回调接口
+app.post('/api/feishu/card_action', async (req, res) => {
+    // 飞书卡片交互也需要处理 Challenge
+    if (req.body && req.body.type === 'url_verification') {
+        return res.status(200).send({ challenge: req.body.challenge });
+    }
+
+    const { action, open_id } = req.body;
+    if (action && action.value && action.value.action === 'save_to_doc') {
+        const { content, title } = action.value;
+
+        try {
+            // 1. 创建新文档
+            const createRes = await larkClient.docx.document.create({
+                data: {
+                    title: title,
+                },
+            });
+            const documentId = createRes.document.document_id;
+
+            // 2. 写入内容 (简单的文本块)
+            await larkClient.docx.documentBlock.patch({
+                path: {
+                    document_id: documentId,
+                    block_id: documentId, // 根 block_id 等于 document_id
+                },
+                data: {
+                    children: [
+                        {
+                            block_type: 2, // 文本类型
+                            text: {
+                                content: content,
+                            },
+                        },
+                    ],
+                    index: 0,
+                },
+            });
+
+            const docUrl = `https://feishu.cn/docx/${documentId}`;
+
+            // 3. 返回卡片更新或发送消息通知用户
+            res.json({
+                toast: "保存成功！正在发送文档链接...",
+            });
+
+            // 异步给用户发个消息链接
+            await larkClient.im.message.create({
+                params: { receive_id_type: 'open_id' },
+                data: {
+                    receive_id: open_id,
+                    content: JSON.stringify({ text: `文档已创建成功！你可以点击查看：${docUrl}` }),
+                    msg_type: 'text',
+                },
+            });
+        } catch (error) {
+            console.error('创建云文档失败:', error);
+            res.json({ toast: "保存失败，请检查权限设置" });
+        }
+    } else {
+        res.status(200).send();
     }
 });
 
