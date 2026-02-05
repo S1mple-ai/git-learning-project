@@ -30,9 +30,6 @@ const eventDispatcher = new lark.EventDispatcher({
     'im.message.receive_v1': async (data) => {
         const { message } = data;
         const text = JSON.parse(message.content).text;
-        const openId = message.mentions ? message.mentions[0].id : data.sender.sender_id.open_id;
-
-        console.log(`收到来自飞书的消息: ${text}`);
 
         try {
             // 调用 AI 获取回复
@@ -58,13 +55,8 @@ const eventDispatcher = new lark.EventDispatcher({
 
 // 飞书事件订阅 Webhook 接口
 app.post('/api/feishu/webhook', (req, res, next) => {
-    console.log('--- 收到 Webhook 请求 ---');
-    console.log('Headers:', JSON.stringify(req.headers));
-    console.log('Body:', JSON.stringify(req.body));
-    
-    // 特别处理飞书的 URL 验证（Challenge）
+    // 处理飞书的 URL 验证（Challenge）
     if (req.body && req.body.type === 'url_verification') {
-        console.log('✅ 正在响应飞书 URL 验证 (Challenge)');
         return res.status(200).send({
             challenge: req.body.challenge
         });
