@@ -83,7 +83,7 @@ app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
     try {
         const response = await aiClient.chat.completions.create({
-            model: "glm-4.7-flash",
+            model: "glm-4-flash",
             messages: messages,
         });
         res.json(response.choices[0].message);
