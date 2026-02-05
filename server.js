@@ -28,13 +28,8 @@ const eventDispatcher = new lark.EventDispatcher({
     verificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
 }).register({
     'im.message.receive_v1': async (data) => {
-        const { message, sender } = data;
+        const { message } = data;
         const text = JSON.parse(message.content).text;
-        const actualOpenId = sender.sender_id.open_id;
-
-        console.log('--- 收到消息 ---');
-        console.log('内容:', text);
-        console.log('您的真实 Open ID 是:', actualOpenId);
 
         try {
             // 调用 AI 获取回复
@@ -73,16 +68,17 @@ app.post('/api/feishu/webhook', (req, res, next) => {
 // 主动发消息接口
 app.post('/api/feishu/push', async (req, res) => {
     const { user_id, text } = req.body;
+    const targetUserId = user_id || process.env.FEISHU_USER_ID;
     
-    if (!user_id || !text) {
-        return res.status(400).json({ success: false, error: '缺少 user_id 或 text' });
+    if (!targetUserId || !text) {
+        return res.status(400).json({ success: false, error: '缺少 user_id (或 FEISHU_USER_ID 环境变量) 或 text' });
     }
 
     try {
         const result = await larkClient.im.message.create({
             params: { receive_id_type: 'open_id' },
             data: {
-                receive_id: user_id,
+                receive_id: targetUserId,
                 content: JSON.stringify({ text: text }),
                 msg_type: 'text',
             },
