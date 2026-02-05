@@ -65,20 +65,26 @@ app.post('/api/feishu/webhook', (req, res, next) => {
     lark.adaptExpress(eventDispatcher)(req, res, next);
 });
 
-// 主动发消息接口 (示例)
-app.post('/api/feishu/send', async (req, res) => {
-    const { receive_id, text } = req.body; // receive_id 可以是 open_id
+// 主动发消息接口
+app.post('/api/feishu/push', async (req, res) => {
+    const { user_id, text } = req.body;
+    
+    if (!user_id || !text) {
+        return res.status(400).json({ success: false, error: '缺少 user_id 或 text' });
+    }
+
     try {
         const result = await larkClient.im.message.create({
             params: { receive_id_type: 'open_id' },
             data: {
-                receive_id: receive_id,
+                receive_id: user_id,
                 content: JSON.stringify({ text: text }),
                 msg_type: 'text',
             },
         });
-        res.json({ success: true, result });
+        res.json({ success: true, msg: '消息发送成功', result });
     } catch (error) {
+        console.error('主动发送失败:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
